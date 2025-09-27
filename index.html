@@ -2,387 +2,1258 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Chatbot con Lambda + OpenAI</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MedicaLLM - Asistente Médico Inteligente</title>
   <style>
-    body { font-family: Arial, sans-serif; background:#f4f4f9; margin:0; padding:0; }
-    #chat { max-width:600px; margin:40px auto; background:white; border:1px solid #ccc; border-radius:8px; padding:20px; height:70vh; overflow-y:auto; }
-    .msg { margin:10px 0; }
-    .user { color:#00529b; font-weight:bold; }
-    .assistant { color:#3b7a57; font-weight:bold; }
-    .system { color:#999; font-style:italic; }
-    #inputBox { display:flex; max-width:600px; margin:10px auto; gap:10px; }
-    #messageInput { flex:1; padding:10px; font-size:16px; border:1px solid #ccc; border-radius:4px; }
-    #sendBtn, #endBtn, #resultsBtn {
-      padding:10px 12px; font-size:16px; border:none; border-radius:4px; cursor:pointer;
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
     }
-    #sendBtn { background:#00529b; color:white; }
-    #sendBtn:hover { background:#003f73; }
-    #endBtn { background:#b80000; color:white; }
-    #endBtn:hover { background:#7a0000; }
-    #resultsBtn { background:#0d7a2b; color:white; }
-    #resultsBtn:hover { background:#09561f; }
 
-    /* Overlay de consentimiento */
-    #consentOverlay {
-      position: fixed; inset: 0;
-      background: rgba(0,0,0,0.6);
-      display: none; /* se muestra según estado */
-      align-items: center; justify-content: center;
+    :root {
+      --primary: #2563eb;
+      --primary-dark: #1e40af;
+      --primary-light: #dbeafe;
+      --secondary: #10b981;
+      --secondary-dark: #059669;
+      --danger: #ef4444;
+      --danger-dark: #dc2626;
+      --bg-main: #f8fafc;
+      --bg-card: #ffffff;
+      --text-primary: #1e293b;
+      --text-secondary: #64748b;
+      --border: #e2e8f0;
+      --shadow-sm: 0 1px 3px rgba(0,0,0,0.12);
+      --shadow-md: 0 4px 6px rgba(0,0,0,0.1);
+      --shadow-lg: 0 10px 25px rgba(0,0,0,0.1);
+      --shadow-xl: 0 20px 40px rgba(0,0,0,0.15);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       padding: 20px;
-      z-index: 9999;
+      position: relative;
+      overflow-x: hidden;
     }
-    #consentCard {
-      max-width: 640px; width: 100%;
-      background: #fff; border-radius: 10px; padding: 24px; border: 1px solid #ddd;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+
+    body::before {
+      content: "";
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: 
+        radial-gradient(circle at 20% 80%, rgba(120, 119, 198, 0.3), transparent 50%),
+        radial-gradient(circle at 80% 20%, rgba(255, 119, 198, 0.3), transparent 50%),
+        radial-gradient(circle at 40% 40%, rgba(120, 219, 255, 0.2), transparent 50%);
+      pointer-events: none;
+      z-index: 1;
     }
-    #consentTitle { margin-top: 0; }
-    #consentButtons { display: flex; gap: 10px; margin-top: 16px; }
-    #acceptBtn, #declineBtn {
-      padding: 10px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 15px;
+
+    .app-container {
+      width: 100%;
+      max-width: 900px;
+      background: var(--bg-card);
+      border-radius: 24px;
+      box-shadow: var(--shadow-xl);
+      overflow: hidden;
+      position: relative;
+      z-index: 2;
+      backdrop-filter: blur(10px);
+      background: rgba(255, 255, 255, 0.95);
+      animation: slideUp 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
     }
-    #acceptBtn { background: #00529b; color: #fff; }
-    #acceptBtn:hover { background:#003f73; }
-    #declineBtn { background: #e0e0e0; color: #333; }
-    #declineBtn:hover { background: #cfcfcf; }
-    #consentNote { font-size: 13px; color: #444; margin-top: 6px; }
+
+    @keyframes slideUp {
+      from {
+        opacity: 0;
+        transform: translateY(30px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Header */
+    .header {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      color: white;
+      padding: 24px 32px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .header::before {
+      content: "";
+      position: absolute;
+      top: -50%;
+      right: -10%;
+      width: 300px;
+      height: 300px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 50%;
+      animation: float 20s infinite ease-in-out;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0) rotate(0deg); }
+      50% { transform: translateY(-20px) rotate(180deg); }
+    }
+
+    .logo {
+      width: 48px;
+      height: 48px;
+      background: white;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 24px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .header-content {
+      position: relative;
+      z-index: 1;
+    }
+
+    .header h1 {
+      font-size: 24px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+
+    .header p {
+      font-size: 14px;
+      opacity: 0.9;
+    }
+
+    .status-indicator {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255,255,255,0.2);
+      padding: 8px 16px;
+      border-radius: 20px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      background: #10b981;
+      border-radius: 50%;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+
+    /* Chat Container */
+    .chat-container {
+      height: 500px;
+      overflow-y: auto;
+      padding: 24px;
+      background: linear-gradient(to bottom, var(--bg-main), white);
+      scroll-behavior: smooth;
+    }
+
+    .chat-container::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .chat-container::-webkit-scrollbar-track {
+      background: var(--border);
+      border-radius: 3px;
+    }
+
+    .chat-container::-webkit-scrollbar-thumb {
+      background: var(--primary);
+      border-radius: 3px;
+    }
+
+    /* Messages */
+    .message {
+      margin-bottom: 20px;
+      display: flex;
+      gap: 12px;
+      animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+      from {
+        opacity: 0;
+        transform: translateY(10px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    .message-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+    }
+
+    .message.user .message-avatar {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+
+    .message.assistant .message-avatar {
+      background: linear-gradient(135deg, var(--secondary) 0%, var(--secondary-dark) 100%);
+      color: white;
+    }
+
+    .message-content {
+      flex: 1;
+    }
+
+    .message-header {
+      font-size: 13px;
+      font-weight: 600;
+      margin-bottom: 6px;
+      color: var(--text-secondary);
+    }
+
+    .message-bubble {
+      background: white;
+      padding: 12px 16px;
+      border-radius: 16px;
+      box-shadow: var(--shadow-sm);
+      line-height: 1.5;
+      position: relative;
+    }
+
+    .message.user .message-bubble {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      margin-left: auto;
+      max-width: 80%;
+    }
+
+    .message.assistant .message-bubble {
+      background: white;
+      border: 1px solid var(--border);
+      max-width: 80%;
+    }
+
+    .typing-indicator {
+      display: inline-flex;
+      gap: 4px;
+      padding: 16px 0;
+    }
+
+    .typing-indicator span {
+      width: 8px;
+      height: 8px;
+      background: var(--primary);
+      border-radius: 50%;
+      animation: typing 1.4s infinite;
+    }
+
+    .typing-indicator span:nth-child(2) {
+      animation-delay: 0.2s;
+    }
+
+    .typing-indicator span:nth-child(3) {
+      animation-delay: 0.4s;
+    }
+
+    @keyframes typing {
+      0%, 60%, 100% {
+        transform: translateY(0);
+        opacity: 0.5;
+      }
+      30% {
+        transform: translateY(-10px);
+        opacity: 1;
+      }
+    }
+
+    /* Results Card */
+    .results-card {
+      background: linear-gradient(135deg, #f8fafc 0%, #e0f2fe 100%);
+      border: 2px solid var(--primary-light);
+      border-radius: 20px;
+      padding: 24px;
+      margin-top: 16px;
+      animation: slideIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    @keyframes slideIn {
+      from {
+        opacity: 0;
+        transform: scale(0.95);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+
+    .results-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .results-icon {
+      width: 40px;
+      height: 40px;
+      background: var(--primary);
+      color: white;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+
+    .results-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .diagnosis-list {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      margin: 16px 0;
+    }
+
+    .diagnosis-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .diagnosis-item:last-child {
+      border-bottom: none;
+    }
+
+    .diagnosis-name {
+      font-weight: 600;
+      color: var(--text-primary);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .diagnosis-badge {
+      background: var(--primary-light);
+      color: var(--primary);
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .diagnosis-probability {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .progress-bar {
+      width: 120px;
+      height: 8px;
+      background: var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--primary), var(--secondary));
+      border-radius: 4px;
+      transition: width 1s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .anamnesis-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 16px;
+      margin-top: 20px;
+    }
+
+    .anamnesis-item {
+      background: white;
+      padding: 16px;
+      border-radius: 12px;
+      border-left: 4px solid var(--primary);
+    }
+
+    .anamnesis-label {
+      font-size: 12px;
+      color: var(--text-secondary);
+      font-weight: 600;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .anamnesis-value {
+      color: var(--text-primary);
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    /* Input Area */
+    .input-area {
+      padding: 20px 24px;
+      background: var(--bg-main);
+      border-top: 1px solid var(--border);
+    }
+
+    .input-container {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .input-wrapper {
+      flex: 1;
+      position: relative;
+    }
+
+    .message-input {
+      width: 100%;
+      padding: 14px 20px;
+      border: 2px solid var(--border);
+      border-radius: 24px;
+      font-size: 15px;
+      transition: all 0.3s ease;
+      background: white;
+    }
+
+    .message-input:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
+    }
+
+    .message-input:disabled {
+      background: var(--bg-main);
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+
+    /* Buttons */
+    .btn {
+      padding: 12px 20px;
+      border: none;
+      border-radius: 20px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn::before {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 0;
+      height: 0;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.3);
+      transform: translate(-50%, -50%);
+      transition: width 0.6s, height 0.6s;
+    }
+
+    .btn:hover::before {
+      width: 300px;
+      height: 300px;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      color: white;
+    }
+
+    .btn-primary:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(37, 99, 235, 0.3);
+    }
+
+    .btn-success {
+      background: linear-gradient(135deg, var(--secondary) 0%, var(--secondary-dark) 100%);
+      color: white;
+    }
+
+    .btn-success:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(16, 185, 129, 0.3);
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, var(--danger) 0%, var(--danger-dark) 100%);
+      color: white;
+    }
+
+    .btn-danger:hover:not(:disabled) {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(239, 68, 68, 0.3);
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    /* Consent Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(5px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      z-index: 1000;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .modal-overlay.show {
+      display: flex;
+    }
+
+    .modal-card {
+      max-width: 600px;
+      width: 100%;
+      background: white;
+      border-radius: 24px;
+      overflow: hidden;
+      box-shadow: var(--shadow-xl);
+      animation: modalSlideIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    @keyframes modalSlideIn {
+      from {
+        opacity: 0;
+        transform: scale(0.9) translateY(20px);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+      }
+    }
+
+    .modal-header {
+      background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+      color: white;
+      padding: 24px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .modal-header::before {
+      content: "🔒";
+      position: absolute;
+      right: 20px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 48px;
+      opacity: 0.1;
+    }
+
+    .modal-title {
+      font-size: 24px;
+      font-weight: 700;
+      margin: 0;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .modal-body {
+      padding: 32px;
+    }
+
+    .modal-body p {
+      color: var(--text-secondary);
+      line-height: 1.6;
+      margin-bottom: 16px;
+    }
+
+    .highlight-box {
+      background: var(--primary-light);
+      border-left: 4px solid var(--primary);
+      padding: 16px;
+      border-radius: 8px;
+      margin: 20px 0;
+    }
+
+    .highlight-box strong {
+      color: var(--primary-dark);
+    }
+
+    .modal-footer {
+      padding: 24px 32px;
+      background: var(--bg-main);
+      display: flex;
+      gap: 12px;
+      justify-content: flex-end;
+    }
+
+    .privacy-note {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-top: 16px;
+      padding: 12px;
+      background: var(--bg-main);
+      border-radius: 8px;
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .app-container {
+        border-radius: 0;
+        height: 100vh;
+        max-width: 100%;
+      }
+
+      .chat-container {
+        height: calc(100vh - 200px);
+      }
+
+      .header {
+        padding: 20px;
+      }
+
+      .status-indicator {
+        display: none;
+      }
+
+      .anamnesis-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .message.user .message-bubble,
+      .message.assistant .message-bubble {
+        max-width: 90%;
+      }
+    }
+
+    /* Details/Summary styling */
+    details {
+      margin-top: 16px;
+    }
+
+    summary {
+      cursor: pointer;
+      padding: 12px;
+      background: var(--bg-main);
+      border-radius: 8px;
+      font-weight: 600;
+      color: var(--primary);
+      transition: all 0.3s ease;
+      user-select: none;
+    }
+
+    summary:hover {
+      background: var(--primary-light);
+    }
+
+    details[open] summary {
+      background: var(--primary);
+      color: white;
+      margin-bottom: 12px;
+    }
+
+    pre {
+      white-space: pre-wrap;
+      background: var(--bg-main);
+      border: 1px solid var(--border);
+      padding: 16px;
+      border-radius: 8px;
+      font-size: 12px;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+
+    /* Loading states */
+    .skeleton {
+      background: linear-gradient(90deg, var(--border) 25%, var(--bg-main) 50%, var(--border) 75%);
+      background-size: 200% 100%;
+      animation: loading 1.5s infinite;
+    }
+
+    @keyframes loading {
+      0% { background-position: 200% 0; }
+      100% { background-position: -200% 0; }
+    }
   </style>
 </head>
 <body>
-
-  <!-- Overlay de consentimiento -->
-  <div id="consentOverlay" role="dialog" aria-modal="true">
-    <div id="consentCard">
-      <h2 id="consentTitle">Asistente médico de IA — Consentimiento de tratamiento de datos</h2>
-      <p>
-        Este chat es un <strong>asistente médico de IA</strong> diseñado para realizar una <em>anamnesis</em> (entrevista clínica).
-        Hará preguntas para conocer tus síntomas, antecedentes y condiciones relevantes. <br><br>
-        <strong>No ofrece recomendaciones médicas ni diagnósticos</strong>. Si tienes una urgencia, consulta a un profesional de salud.
-      </p>
-      <p>
-        Al continuar, aceptas el <strong>tratamiento de tus datos personales</strong> para el funcionamiento del sistema.
-        Puedes no aceptar y el chat permanecerá deshabilitado.
-      </p>
-      <div id="consentButtons">
-        <button id="acceptBtn">Aceptar y continuar</button>
-        <button id="declineBtn">No aceptar</button>
+  <!-- Main App Container -->
+  <div class="app-container">
+    <!-- Header -->
+    <div class="header">
+      <div class="logo">🩺</div>
+      <div class="header-content">
+        <h1>MedicaLLM</h1>
+        <p>Asistente médico inteligente para anamnesis</p>
       </div>
-      <div id="consentNote">
-        Puedes cambiar tu decisión borrando los datos del navegador (localStorage) o presionando “Terminar”.
+      <div class="status-indicator">
+        <span class="status-dot"></span>
+        <span>En línea</span>
+      </div>
+    </div>
+
+    <!-- Chat Container -->
+    <div id="chat" class="chat-container"></div>
+
+    <!-- Input Area -->
+    <div class="input-area">
+      <div class="input-container">
+        <div class="input-wrapper">
+          <input 
+            type="text" 
+            id="messageInput" 
+            class="message-input"
+            placeholder="Escribe tu mensaje aquí..."
+            autocomplete="off"
+          />
+        </div>
+        <div class="action-buttons">
+          <button id="sendBtn" class="btn btn-primary" title="Enviar mensaje">
+            <span>➤</span>
+            <span>Enviar</span>
+          </button>
+          <button id="resultsBtn" class="btn btn-success" title="Ver resultados de la anamnesis">
+            <span>📊</span>
+            <span>Resultados</span>
+          </button>
+          <button id="endBtn" class="btn btn-danger" title="Terminar conversación">
+            <span>✕</span>
+          </button>
+        </div>
       </div>
     </div>
   </div>
 
-  <div id="chat"></div>
-
-  <div id="inputBox">
-    <input type="text" id="messageInput" placeholder="Escribe un mensaje..." />
-    <button id="sendBtn">Enviar</button>
-    <button id="resultsBtn" title='Simula escribir: "recibir resultados"'>Resultados</button>
-    <button id="endBtn">Terminar</button>
+  <!-- Consent Modal -->
+  <div id="consentOverlay" class="modal-overlay" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h2 id="consentTitle" class="modal-title">
+          <span>🔐</span>
+          <span>Consentimiento de Tratamiento de Datos</span>
+        </h2>
+      </div>
+      <div class="modal-body">
+        <p>
+          Bienvenido a <strong>MedicaLLM</strong>, tu asistente médico basado en inteligencia artificial.
+        </p>
+        <div class="highlight-box">
+          <strong>¿Qué hace este asistente?</strong><br>
+          • Realiza una anamnesis médica detallada<br>
+          • Recopila información sobre síntomas y antecedentes<br>
+          • Organiza la información médica de manera estructurada<br>
+          • Sugiere posibles diagnósticos basados en los datos
+        </div>
+        <p>
+          <strong>⚠️ Importante:</strong> Este sistema NO reemplaza la consulta médica profesional. 
+          No ofrece diagnósticos definitivos ni tratamientos. Para emergencias médicas, 
+          contacta inmediatamente a servicios de emergencia o acude al centro de salud más cercano.
+        </p>
+        <p>
+          Al continuar, aceptas el tratamiento confidencial de tus datos personales de salud 
+          exclusivamente para el funcionamiento de este sistema. Tus datos se almacenan localmente 
+          en tu navegador y puedes eliminarlos en cualquier momento.
+        </p>
+        <div class="privacy-note">
+          <strong>Privacidad:</strong> Los datos se procesan de forma segura y no se comparten con terceros. 
+          Puedes revocar tu consentimiento en cualquier momento presionando "Terminar" o borrando los datos del navegador.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="declineBtn" class="btn" style="background: var(--bg-main); color: var(--text-secondary);">
+          No acepto
+        </button>
+        <button id="acceptBtn" class="btn btn-primary">
+          Acepto y continúo
+        </button>
+      </div>
+    </div>
   </div>
 
-<script>
-const API_URL = "https://182m3xjs0k.execute-api.us-east-2.amazonaws.com/dev/chat";  // <-- tu endpoint
+  <script>
+    const API_URL = "https://182m3xjs0k.execute-api.us-east-2.amazonaws.com/dev/chat";
+    
+    const INTRO_ASSISTANT_MSG = `¡Hola! Soy MedicaLLM, tu asistente médico virtual. 
+    Estoy aquí para ayudarte a documentar tus síntomas y antecedentes médicos de manera organizada.
+    
+    Para comenzar, ¿cuál es tu principal motivo de consulta el día de hoy?`;
 
-// Prompt visible (informativo) — el backend ya inyecta su propio system prompt
-const INTRO_ASSISTANT_MSG = "Hola, soy un asistente médico de IA. Estoy aquí para realizar una anamnesis y entender mejor tus síntomas y antecedentes. Para comenzar: ¿cuál es tu motivo de consulta principal?";
-
-function loadHistory() {
-  try { return JSON.parse(localStorage.getItem("chat_messages")) || []; }
-  catch { return []; }
-}
-
-function saveHistory(messages) {
-  localStorage.setItem("chat_messages", JSON.stringify(messages));
-}
-
-function clearHistory() {
-  localStorage.removeItem("chat_messages");
-}
-
-function renderChat(messages) {
-  const chat = document.getElementById("chat");
-  chat.innerHTML = "";
-  messages.forEach(m => {
-    const div = document.createElement("div");
-    div.className = "msg";
-    let roleClass = m.role;
-    if (!["user","assistant","system"].includes(roleClass)) roleClass="system";
-    const role = m.role == 'user' ? 'Paciente' : 'MedicaLLM';
-    div.innerHTML = `<span class="${roleClass}">${role}:</span> ${m.content}`;
-    chat.appendChild(div);
-  });
-  chat.scrollTop = chat.scrollHeight;
-}
-
-function setChatEnabled(enabled) {
-  const input = document.getElementById("messageInput");
-  const sendBtn = document.getElementById("sendBtn");
-  const endBtn = document.getElementById("endBtn");
-  const resultsBtn = document.getElementById("resultsBtn");
-  input.disabled = !enabled;
-  sendBtn.disabled = !enabled;
-  endBtn.disabled = false; // siempre permitimos terminar
-  resultsBtn.disabled = !enabled;
-}
-
-function showConsentOverlay(show) {
-  const overlay = document.getElementById("consentOverlay");
-  overlay.style.display = show ? "flex" : "none";
-}
-
-function formatPredictions(preds) {
-  const top = [...(preds || [])].sort((a,b) => b.probability - a.probability).slice(0,3);
-  if (top.length === 0) return "(No predictions)";
-  return top.map((p, i) => {
-    const pct = (p.probability * 100).toFixed(1);
-    return `${i+1}. ${p.disease} — ${pct}%`;
-  }).join("<br>");
-}
-
-async function sendUserMessage(text) {
-  let messages = loadHistory();
-
-  // No populamos system aquí porque el backend ya preprende su system prompt de anamnesis
-  messages.push({ role:"user", content:text });
-  renderChat(messages);
-
-  const res = await fetch(API_URL, {
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({ messages })
-  });
-  const data = await res.json();
-
-  if (text.trim().toLowerCase() === "recibir resultados") {
-    if (data.mode === "results") {
-      const summary = data.symptoms_text || "(no summary)";
-      const predsHtml = formatPredictions(data.predictions);
-      const assistantMsg = {
-        role:"assistant",
-        content: `Resumen (enviado al modelo):<br><em>${summary}</em><br><br><strong>Predicciones</strong>:<br>${predsHtml}`
-      };
-      messages.push(assistantMsg);
-      saveHistory(messages);
-      renderChat(messages);
-    } else {
-      const assistantMsg = { role:"assistant", content:"No se pudieron obtener resultados." };
-      messages.push(assistantMsg);
-      saveHistory(messages);
-      renderChat(messages);
+    // Utilidades
+    function loadHistory() {
+      try { 
+        return JSON.parse(localStorage.getItem("chat_messages")) || []; 
+      } catch { 
+        return []; 
+      }
     }
-    return;
-  }
 
-  const assistantMsg = { role:"assistant", content: data.answer || "(sin respuesta)" };
-  messages.push(assistantMsg);
-  saveHistory(messages);
-  renderChat(messages);
-}
-
-// Botón enviar
-document.getElementById("sendBtn").addEventListener("click", () => {
-  const input = document.getElementById("messageInput");
-  const text = input.value.trim();
-  if (text) {
-    sendUserMessage(text);
-    input.value="";
-  }
-});
-
-// Enter para enviar
-document.getElementById("messageInput").addEventListener("keypress", e => {
-  if (e.key==="Enter" && !document.getElementById("messageInput").disabled) {
-    document.getElementById("sendBtn").click();
-  }
-});
-
-// Botón resultados (simula escribir "recibir resultados")
-document.getElementById("resultsBtn").addEventListener("click", () => {
-  sendUserMessage("recibir resultados");
-});
-
-// Botón terminar
-document.getElementById("endBtn").addEventListener("click", () => {
-  clearHistory();
-  renderChat([]);
-  // Opcional: también revocar consentimiento
-  localStorage.removeItem("consent");
-  alert("Conversación terminada. El historial ha sido borrado.");
-});
-
-// --- Lógica de consentimiento al cargar ---
-(function init() {
-  const consent = localStorage.getItem("consent"); // "accepted" | "declined" | null
-  const messages = loadHistory();
-
-  if (consent === "accepted") {
-    // Chat habilitado
-    setChatEnabled(true);
-    // Si es la primera vez (sin mensajes), mostramos un intro del asistente
-    if (messages.length === 0) {
-      const intro = { role: "assistant", content: INTRO_ASSISTANT_MSG };
-      messages.push(intro);
-      saveHistory(messages);
+    function saveHistory(messages) {
+      localStorage.setItem("chat_messages", JSON.stringify(messages));
     }
-    renderChat(messages);
-    showConsentOverlay(false);
-  } else if (consent === "declined") {
-    // Deshabilitar chat y mostrar overlay con mensaje de gracias
-    setChatEnabled(false);
-    showConsentOverlay(true);
-    // Cambiamos el contenido del overlay para el estado “gracias”
-    document.getElementById("consentTitle").innerText = "Gracias";
-    document.querySelector("#consentCard p").innerHTML = "Has decidido no aceptar el tratamiento de datos personales. El chat permanecerá deshabilitado hasta que aceptes.";
-    document.getElementById("acceptBtn").style.display = "inline-block";
-    document.getElementById("declineBtn").style.display = "none";
-    renderChat(messages);
-  } else {
-    // Aún no decidió: mostrar overlay y deshabilitar chat
-    setChatEnabled(false);
-    showConsentOverlay(true);
-    renderChat(messages);
-  }
-})();
 
-// Acciones de overlay
-document.getElementById("acceptBtn").addEventListener("click", () => {
-  localStorage.setItem("consent", "accepted");
-  setChatEnabled(true);
-  showConsentOverlay(false);
+    function clearHistory() {
+      localStorage.removeItem("chat_messages");
+    }
 
-  let messages = loadHistory();
-  if (messages.length === 0) {
-    const intro = { role: "assistant", content: INTRO_ASSISTANT_MSG };
-    messages.push(intro);
-    saveHistory(messages);
-  }
-  renderChat(loadHistory());
-});
+    // Renderizado del chat
+    function renderChat(messages) {
+      const chat = document.getElementById("chat");
+      chat.innerHTML = "";
+      
+      messages.forEach((msg, index) => {
+        const messageDiv = document.createElement("div");
+        messageDiv.className = `message ${msg.role}`;
+        
+        const avatar = document.createElement("div");
+        avatar.className = "message-avatar";
+        avatar.innerHTML = msg.role === 'user' ? '👤' : '🤖';
+        
+        const content = document.createElement("div");
+        content.className = "message-content";
+        
+        const header = document.createElement("div");
+        header.className = "message-header";
+        header.textContent = msg.role === 'user' ? 'Tú' : 'MedicaLLM';
+        
+        const bubble = document.createElement("div");
+        bubble.className = "message-bubble";
+        bubble.innerHTML = msg.content;
+        
+        content.appendChild(header);
+        content.appendChild(bubble);
+        
+        if (msg.role === 'assistant') {
+          messageDiv.appendChild(avatar);
+          messageDiv.appendChild(content);
+        } else {
+          messageDiv.appendChild(content);
+        }
+        
+        chat.appendChild(messageDiv);
+      });
+      
+      // Scroll suave al final
+      setTimeout(() => {
+        chat.scrollTop = chat.scrollHeight;
+      }, 100);
+    }
 
-function formatPredictionsList(preds) {
-  const top = [...(preds || [])].sort((a,b) => b.probability - a.probability);
-  if (top.length === 0) return "<em>(Sin predicciones)</em>";
-  return `<ol>${top.map(p => {
-    const pct = (p.probability * 100).toFixed(1);
-    return `<li><strong>${p.disease}</strong> — ${pct}%</li>`;
-  }).join("")}</ol>`;
-}
+    // Mostrar indicador de escritura
+    function showTypingIndicator() {
+      const chat = document.getElementById("chat");
+      const typingDiv = document.createElement("div");
+      typingDiv.className = "message assistant";
+      typingDiv.id = "typing-indicator";
+      
+      const avatar = document.createElement("div");
+      avatar.className = "message-avatar";
+      avatar.innerHTML = '🤖';
+      
+      const content = document.createElement("div");
+      content.className = "message-content";
+      
+      const header = document.createElement("div");
+      header.className = "message-header";
+      header.textContent = 'MedicaLLM está escribiendo...';
+      
+      const indicator = document.createElement("div");
+      indicator.className = "typing-indicator";
+      indicator.innerHTML = '<span></span><span></span><span></span>';
+      
+      content.appendChild(header);
+      content.appendChild(indicator);
+      typingDiv.appendChild(avatar);
+      typingDiv.appendChild(content);
+      
+      chat.appendChild(typingDiv);
+      chat.scrollTop = chat.scrollHeight;
+    }
 
-function renderResultsCard(summaryEs, anamnesisObj, predictions) {
-  const chat = document.getElementById("chat");
+    function hideTypingIndicator() {
+      const indicator = document.getElementById("typing-indicator");
+      if (indicator) indicator.remove();
+    }
 
-  // Tarjeta de resumen
-  const card = document.createElement("div");
-  card.className = "msg";
-  card.innerHTML = `
-    <div style="border:1px solid #e0e0e0; border-radius:8px; padding:12px; background:#fafafa;">
-      <div class="assistant">assistant:</div>
-      <p style="margin:8px 0 12px 0;">${summaryEs.replace(/\n/g,'<br>')}</p>
+    // Control del chat
+    function setChatEnabled(enabled) {
+      document.getElementById("messageInput").disabled = !enabled;
+      document.getElementById("sendBtn").disabled = !enabled;
+      document.getElementById("resultsBtn").disabled = !enabled;
+      document.getElementById("endBtn").disabled = false;
+    }
 
-      <div style="margin:10px 0;">
-        <h4 style="margin:6px 0;">Posibles diagnósticos</h4>
-        ${formatPredictionsList(predictions)}
-      </div>
+    // Modal de consentimiento
+    function showConsentOverlay(show) {
+      const overlay = document.getElementById("consentOverlay");
+      overlay.classList.toggle("show", show);
+    }
 
-      <div style="margin:10px 0;">
-        <h4 style="margin:6px 0;">Anamnesis estructurada</h4>
-        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+    // Formatear resultados
+    function renderResultsCard(summaryEs, anamnesisObj, predictions) {
+      const chat = document.getElementById("chat");
+      
+      const messageDiv = document.createElement("div");
+      messageDiv.className = "message assistant";
+      
+      const avatar = document.createElement("div");
+      avatar.className = "message-avatar";
+      avatar.innerHTML = '🤖';
+      
+      const content = document.createElement("div");
+      content.className = "message-content";
+      
+      const header = document.createElement("div");
+      header.className = "message-header";
+      header.textContent = 'MedicaLLM - Resultados del Análisis';
+      
+      const resultsCard = document.createElement("div");
+      resultsCard.className = "results-card";
+      
+      // Header de resultados
+      resultsCard.innerHTML = `
+        <div class="results-header">
+          <div class="results-icon">📋</div>
           <div>
-            <strong>Motivo de consulta:</strong><br>${(anamnesisObj.motivo_consulta || "no informado")}
-          </div>
-          <div>
-            <strong>Síntoma principal:</strong><br>${(anamnesisObj.enfermedad_actual?.sintoma_principal || "no informado")}
-          </div>
-          <div>
-            <strong>Inicio:</strong><br>${(anamnesisObj.enfermedad_actual?.inicio || "no informado")}
-          </div>
-          <div>
-            <strong>Características:</strong><br>${(anamnesisObj.enfermedad_actual?.caracteristicas || "no informado")}
-          </div>
-          <div>
-            <strong>Antecedentes personales:</strong><br>${(anamnesisObj.antecedentes_personales || []).join(", ") || "—"}
-          </div>
-          <div>
-            <strong>Antecedentes familiares:</strong><br>${(anamnesisObj.antecedentes_familiares || []).join(", ") || "—"}
-          </div>
-          <div>
-            <strong>Hábitos - Tabaquismo:</strong><br>${(anamnesisObj.habitos?.tabaquismo || "no informado")}
-          </div>
-          <div>
-            <strong>Hábitos - Alcohol:</strong><br>${(anamnesisObj.habitos?.alcohol || "no informado")}
-          </div>
-          <div style="grid-column: 1 / -1;">
-            <strong>Síntomas asociados:</strong><br>${(anamnesisObj.sintomas_asociados || []).join(", ") || "—"}
+            <div class="results-title">Resumen de Anamnesis</div>
+            <div style="font-size: 14px; color: var(--text-secondary); margin-top: 4px;">
+              Análisis completo de la consulta médica
+            </div>
           </div>
         </div>
-
-        <details style="margin-top:10px;">
-          <summary>Ver JSON</summary>
-          <pre style="white-space:pre-wrap; background:#fff; border:1px solid #eee; padding:8px; border-radius:6px; margin-top:6px;">${JSON.stringify(anamnesisObj, null, 2)}</pre>
+        
+        <p style="margin: 20px 0; line-height: 1.6; color: var(--text-primary);">
+          ${summaryEs.replace(/\n/g, '<br>')}
+        </p>
+        
+        <div style="margin: 24px 0;">
+          <h4 style="margin-bottom: 16px; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 20px;">🎯</span>
+            Posibles Diagnósticos
+          </h4>
+          <div class="diagnosis-list">
+            ${formatDiagnosisList(predictions)}
+          </div>
+        </div>
+        
+        <div style="margin: 24px 0;">
+          <h4 style="margin-bottom: 16px; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 20px;">📝</span>
+            Información Recopilada
+          </h4>
+          <div class="anamnesis-grid">
+            <div class="anamnesis-item">
+              <div class="anamnesis-label">Motivo de Consulta</div>
+              <div class="anamnesis-value">${anamnesisObj.motivo_consulta || "No especificado"}</div>
+            </div>
+            <div class="anamnesis-item">
+              <div class="anamnesis-label">Síntoma Principal</div>
+              <div class="anamnesis-value">${anamnesisObj.enfermedad_actual?.sintoma_principal || "No especificado"}</div>
+            </div>
+            <div class="anamnesis-item">
+              <div class="anamnesis-label">Tiempo de Evolución</div>
+              <div class="anamnesis-value">${anamnesisObj.enfermedad_actual?.inicio || "No especificado"}</div>
+            </div>
+            <div class="anamnesis-item">
+              <div class="anamnesis-label">Características</div>
+              <div class="anamnesis-value">${anamnesisObj.enfermedad_actual?.caracteristicas || "No especificado"}</div>
+            </div>
+            <div class="anamnesis-item">
+              <div class="anamnesis-label">Antecedentes Personales</div>
+              <div class="anamnesis-value">${(anamnesisObj.antecedentes_personales || []).join(", ") || "Ninguno"}</div>
+            </div>
+            <div class="anamnesis-item">
+              <div class="anamnesis-label">Antecedentes Familiares</div>
+              <div class="anamnesis-value">${(anamnesisObj.antecedentes_familiares || []).join(", ") || "Ninguno"}</div>
+            </div>
+            <div class="anamnesis-item">
+              <div class="anamnesis-label">Hábitos - Tabaco</div>
+              <div class="anamnesis-value">${anamnesisObj.habitos?.tabaquismo || "No informado"}</div>
+            </div>
+            <div class="anamnesis-item">
+              <div class="anamnesis-label">Hábitos - Alcohol</div>
+              <div class="anamnesis-value">${anamnesisObj.habitos?.alcohol || "No informado"}</div>
+            </div>
+            ${anamnesisObj.sintomas_asociados && anamnesisObj.sintomas_asociados.length > 0 ? `
+            <div class="anamnesis-item" style="grid-column: 1 / -1;">
+              <div class="anamnesis-label">Síntomas Asociados</div>
+              <div class="anamnesis-value">${anamnesisObj.sintomas_asociados.join(", ")}</div>
+            </div>
+            ` : ''}
+          </div>
+        </div>
+        
+        <details>
+          <summary>Ver datos técnicos (JSON)</summary>
+          <pre>${JSON.stringify(anamnesisObj, null, 2)}</pre>
         </details>
-      </div>
-    </div>
-  `;
-  chat.appendChild(card);
-  chat.scrollTop = chat.scrollHeight;
-}
+      `;
+      
+      content.appendChild(header);
+      content.appendChild(resultsCard);
+      messageDiv.appendChild(avatar);
+      messageDiv.appendChild(content);
+      
+      chat.appendChild(messageDiv);
+      chat.scrollTop = chat.scrollHeight;
+    }
 
-async function sendUserMessage(text) {
-  let messages = loadHistory();
+    function formatDiagnosisList(predictions) {
+      const sorted = [...(predictions || [])].sort((a, b) => b.probability - a.probability);
+      if (sorted.length === 0) return '<div style="text-align: center; color: var(--text-secondary);">No hay predicciones disponibles</div>';
+      
+      return sorted.slice(0, 5).map((pred, index) => {
+        const percentage = (pred.probability * 100).toFixed(1);
+        const badges = {
+          0: 'Más probable',
+          1: 'Probable',
+          2: 'Posible'
+        };
+        
+        return `
+          <div class="diagnosis-item">
+            <div class="diagnosis-name">
+              <span style="font-size: 18px; margin-right: 8px;">${index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : '○'}</span>
+              ${pred.disease}
+              ${badges[index] ? `<span class="diagnosis-badge">${badges[index]}</span>` : ''}
+            </div>
+            <div class="diagnosis-probability">
+              <div class="progress-bar">
+                <div class="progress-fill" style="width: ${percentage}%"></div>
+              </div>
+              <strong>${percentage}%</strong>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
 
-  messages.push({ role:"user", content:text });
-  renderChat(messages);
-
-  const res = await fetch(API_URL, {
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body: JSON.stringify({ messages })
-  });
-  const data = await res.json();
-
-  if (text.trim().toLowerCase() === "recibir resultados") {
-    if (data.mode === "results") {
-      const summary = data.symptoms_text || "(sin resumen)";
-      const anamnesis = data.anamnesis || {};
-      const preds = data.predictions || [];
-
-      // Pintamos una tarjeta “linda”
-      renderResultsCard(summary, anamnesis, preds);
-
-      // También guardamos el mensaje “lógico” en el historial para consistencia
-      const assistantMsg = {
-        role:"assistant",
-        content: `Resultados recibidos.`
-      };
-      messages.push(assistantMsg);
-      saveHistory(messages);
-    } else {
-      const assistantMsg = { role:"assistant", content:"No se pudieron obtener resultados." };
-      messages.push(assistantMsg);
+    // Enviar mensaje
+    async function sendUserMessage(text) {
+      let messages = loadHistory();
+      
+      messages.push({ role: "user", content: text });
       saveHistory(messages);
       renderChat(messages);
+      
+      // Mostrar indicador de escritura
+      showTypingIndicator();
+      
+      try {
+        const res = await fetch(API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages })
+        });
+        
+        const data = await res.json();
+        
+        hideTypingIndicator();
+        
+        if (text.trim().toLowerCase() === "recibir resultados") {
+          if (data.mode === "results") {
+            const summary = data.symptoms_text || "No hay resumen disponible";
+            const anamnesis = data.anamnesis || {};
+            const preds = data.predictions || [];
+            
+            renderResultsCard(summary, anamnesis, preds);
+            
+            // Guardar mensaje lógico
+            const assistantMsg = {
+              role: "assistant",
+              content: "He generado el resumen completo de tu consulta. Arriba puedes ver los resultados detallados del análisis."
+            };
+            messages.push(assistantMsg);
+            saveHistory(messages);
+          } else {
+            const assistantMsg = { 
+              role: "assistant", 
+              content: "No pude generar los resultados en este momento. Por favor, intenta nuevamente." 
+            };
+            messages.push(assistantMsg);
+            saveHistory(messages);
+            renderChat(messages);
+          }
+        } else {
+          const assistantMsg = { 
+            role: "assistant", 
+            content: data.answer || "Lo siento, no pude procesar tu mensaje." 
+          };
+          messages.push(assistantMsg);
+          saveHistory(messages);
+          renderChat(messages);
+        }
+      } catch (error) {
+        hideTypingIndicator();
+        const errorMsg = {
+          role: "assistant",
+          content: "⚠️ Hubo un problema de conexión. Por favor, intenta nuevamente."
+        };
+        messages.push(errorMsg);
+        saveHistory(messages);
+        renderChat(messages);
+      }
     }
-    return;
-  }
 
-  const assistantMsg = { role:"assistant", content: data.answer || "(sin respuesta)" };
-  messages.push(assistantMsg);
-  saveHistory(messages);
-  renderChat(messages);
-}
+    // Event Listeners
+    document.getElementById("sendBtn").addEventListener("click", () => {
+      const input = document.getElementById("messageInput");
+      const text = input.value.trim();
+      if (text) {
+        sendUserMessage(text);
+        input.value = "";
+      }
+    });
 
-document.getElementById("declineBtn").addEventListener("click", () => {
-  localStorage.setItem("consent", "declined");
-  setChatEnabled(false);
-  // Mostrar mensaje de gracias y ocultar botón de no aceptar
-  document.getElementById("consentTitle").innerText = "Gracias";
-  document.querySelector("#consentCard p").innerHTML = "Has decidido no aceptar el tratamiento de datos personales. El chat permanecerá deshabilitado hasta que aceptes.";
-  document.getElementById("acceptBtn").style.display = "inline-block";
-  document.getElementById("declineBtn").style.display = "none";
-});
-</script>
+    document.getElementById("messageInput").addEventListener("keypress", e => {
+      if (e.key === "Enter" && !document.getElementById("messageInput").disabled) {
+        document.getElementById("sendBtn").click();
+      }
+    });
 
+    document.getElementById("resultsBtn").addEventListener("click", () => {
+      sendUserMessage("recibir resultados");
+    });
+
+    document.getElementById("endBtn").addEventListener("click", () => {
+      if (confirm("¿Estás seguro de que deseas terminar la conversación? Se borrará todo el historial.")) {
+        clearHistory();
+        localStorage.removeItem("consent");
+        renderChat([]);
+        location.reload();
+      }
+    });
+
+    document.getElementById("acceptBtn").addEventListener("click", () => {
+      localStorage.setItem("consent", "accepted");
+      setChatEnabled(true);
+      showConsentOverlay(false);
+      
+      let messages = loadHistory();
+      if (messages.length === 0) {
+        const intro = { role: "assistant", content: INTRO_ASSISTANT_MSG };
+        messages.push(intro);
+        saveHistory(messages);
+      }
+      renderChat(messages);
+    });
+
+    document.getElementById("declineBtn").addEventListener("click", () => {
+      localStorage.setItem("consent", "declined");
+      setChatEnabled(false);
+      
+      // Actualizar modal para mostrar mensaje de agradecimiento
+      document.getElementById("consentTitle").innerHTML = `
+        <span>👋</span>
+        <span>Gracias por tu visita</span>
+      `;
+      document.querySelector(".modal-body").innerHTML = `
+        <p style="text-align: center; font-size: 18px; margin: 40px 0;">
+          Has decidido no aceptar el tratamiento de datos personales.
+        </p>
+        <p style="text-align: center; color: var(--text-secondary);">
+          El chat permanecerá deshabilitado hasta que aceptes los términos.
+          Puedes cambiar de opinión en cualquier momento.
+        </p>
+      `;
+      document.getElementById("declineBtn").style.display = "none";
+      document.getElementById("acceptBtn").innerHTML = "Reconsiderar y aceptar";
+    });
+
+    // Inicialización
+    (function init() {
+      const consent = localStorage.getItem("consent");
+      const messages = loadHistory();
+      
+      if (consent === "accepted") {
+        setChatEnabled(true);
+        if (messages.length === 0) {
+          const intro = { role: "assistant", content: INTRO_ASSISTANT_MSG };
+          messages.push(intro);
+          saveHistory(messages);
+        }
+        renderChat(messages);
+        showConsentOverlay(false);
+      } else if (consent === "declined") {
+        setChatEnabled(false);
+        showConsentOverlay(true);
+        
+        // Mostrar mensaje de gracias
+        document.getElementById("consentTitle").innerHTML = `
+          <span>👋</span>
+          <span>Gracias por tu visita</span>
+        `;
+        document.querySelector(".modal-body").innerHTML = `
+          <p style="text-align: center; font-size: 18px; margin: 40px 0;">
+            Has decidido no aceptar el tratamiento de datos personales.
+          </p>
+          <p style="text-align: center; color: var(--text-secondary);">
+            El chat permanecerá deshabilitado hasta que aceptes los términos.
+            Puedes cambiar de opinión en cualquier momento.
+          </p>
+        `;
+        document.getElementById("declineBtn").style.display = "none";
+        document.getElementById("acceptBtn").innerHTML = "Reconsiderar y aceptar";
+        renderChat(messages);
+      } else {
+        setChatEnabled(false);
+        showConsentOverlay(true);
+        renderChat(messages);
+      }
+      
+      // Focus en el input si el chat está habilitado
+      if (!document.getElementById("messageInput").disabled) {
+        document.getElementById("messageInput").focus();
+      }
+    })();
+  </script>
 </body>
 </html>
