@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Chatbot con Lambda + OpenAI</title>
+  <style>
+    body { font-family: Arial, sans-serif; background:#f4f4f9; margin:0; padding:0; }
+    #chat { max-width:600px; margin:40px auto; background:white; border:1px solid #ccc; border-radius:8px; padding:20px; height:70vh; overflow-y:auto; }
+    .msg { margin:10px 0; }
+    .user { color:#00529b; font-weight:bold; }
+    .assistant { color:#3b7a57; font-weight:bold; }
+    .system { color:#999; font-style:italic; }
+    #inputBox { display:flex; max-width:600px; margin:10px auto; gap:10px; }
+    #messageInput { flex:1; padding:10px; font-size:16px; border:1px solid #ccc; border-radius:4px; }
+    #sendBtn, #endBtn, #resultsBtn {
+      padding:10px 12px; font-size:16px; border:none; border-radius:4px; cursor:pointer;
+    }
+    #sendBtn { background:#00529b; color:white; }
+    #sendBtn:hover { background:#003f73; }
+    #endBtn { background:#b80000; color:white; }
+    #endBtn:hover { background:#7a0000; }
+    #resultsBtn { background:#0d7a2b; color:white; }
+    #resultsBtn:hover { background:#09561f; }
+
+    /* Overlay de consentimiento */
+    #consentOverlay {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.6);
+      display: none; /* se muestra según estado */
+      align-items: center; justify-content: center;
+      padding: 20px;
+      z-index: 9999;
+    }
+    #consentCard {
+      max-width: 640px; width: 100%;
+      background: #fff; border-radius: 10px; padding: 24px; border: 1px solid #ddd;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+    }
+    #consentTitle { margin-top: 0; }
+    #consentButtons { display: flex; gap: 10px; margin-top: 16px; }
+    #acceptBtn, #declineBtn {
+      padding: 10px 16px; border: none; border-radius: 6px; cursor: pointer; font-size: 15px;
+    }
+    #acceptBtn { background: #00529b; color: #fff; }
+    #acceptBtn:hover { background:#003f73; }
+    #declineBtn { background: #e0e0e0; color: #333; }
+    #declineBtn:hover { background: #cfcfcf; }
+    #consentNote { font-size: 13px; color: #444; margin-top: 6px; }
+  </style>
+</head>
+<body>
+
+  <!-- Overlay de consentimiento -->
+  <div id="consentOverlay" role="dialog" aria-modal="true">
+    <div id="consentCard">
+      <h2 id="consentTitle">Asistente médico de IA — Consentimiento de tratamiento de datos</h2>
+      <p>
+        Este chat es un <strong>asistente médico de IA</strong> diseñado para realizar una <em>anamnesis</em> (entrevista clínica).
+        Hará preguntas para conocer tus síntomas, antecedentes y condiciones relevantes. <br><br>
+        <strong>No ofrece recomendaciones médicas ni diagnósticos</strong>. Si tienes una urgencia, consulta a un profesional de salud.
+      </p>
+      <p>
+        Al continuar, aceptas el <strong>tratamiento de tus datos personales</strong> para el funcionamiento del sistema.
+        Puedes no aceptar y el chat permanecerá deshabilitado.
+      </p>
+      <div id="consentButtons">
+        <button id="acceptBtn">Aceptar y continuar</button>
+        <button id="declineBtn">No aceptar</button>
+      </div>
+      <div id="consentNote">
+        Puedes cambiar tu decisión borrando los datos del navegador (localStorage) o presionando “Terminar”.
+      </div>
+    </div>
+  </div>
+
+  <div id="chat"></div>
+
+  <div id="inputBox">
+    <input type="text" id="messageInput" placeholder="Escribe un mensaje..." />
+    <button id="sendBtn">Enviar</button>
+    <button id="resultsBtn" title='Simula escribir: "recibir resultados"'>Resultados</button>
+    <button id="endBtn">Terminar</button>
+  </div>
+
+<script>
+const API_URL = "https://182m3xjs0k.execute-api.us-east-2.amazonaws.com/dev/chat";  // <-- tu endpoint
+
+// Prompt visible (informativo) — el backend ya inyecta su propio system prompt
+const INTRO_ASSISTANT_MSG = "Hola, soy un asistente médico de IA. Estoy aquí para realizar una anamnesis y entender mejor tus síntomas y antecedentes. Para comenzar: ¿cuál es tu motivo de consulta principal?";
+
+function loadHistory() {
+  try { return JSON.parse(localStorage.getItem("chat_messages")) || []; }
+  catch { return []; }
+}
+
+function saveHistory(messages) {
+  localStorage.setItem("chat_messages", JSON.stringify(messages));
+}
+
+function clearHistory() {
+  localStorage.removeItem("chat_messages");
+}
+
+function renderChat(messages) {
+  const chat = document.getElementById("chat");
+  chat.innerHTML = "";
+  messages.forEach(m => {
+    const div = document.createElement("div");
+    div.className = "msg";
+    let roleClass = m.role;
+    if (!["user","assistant","system"].includes(roleClass)) roleClass="system";
+    const role = m.role == 'user' ? 'Paciente' : 'MedicaLLM';
+    div.innerHTML = `<span class="${roleClass}">${role}:</span> ${m.content}`;
+    chat.appendChild(div);
+  });
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function setChatEnabled(enabled) {
+  const input = document.getElementById("messageInput");
+  const sendBtn = document.getElementById("sendBtn");
+  const endBtn = document.getElementById("endBtn");
+  const resultsBtn = document.getElementById("resultsBtn");
+  input.disabled = !enabled;
+  sendBtn.disabled = !enabled;
+  endBtn.disabled = false; // siempre permitimos terminar
+  resultsBtn.disabled = !enabled;
+}
+
+function showConsentOverlay(show) {
+  const overlay = document.getElementById("consentOverlay");
+  overlay.style.display = show ? "flex" : "none";
+}
+
+function formatPredictions(preds) {
+  const top = [...(preds || [])].sort((a,b) => b.probability - a.probability).slice(0,3);
+  if (top.length === 0) return "(No predictions)";
+  return top.map((p, i) => {
+    const pct = (p.probability * 100).toFixed(1);
+    return `${i+1}. ${p.disease} — ${pct}%`;
+  }).join("<br>");
+}
+
+async function sendUserMessage(text) {
+  let messages = loadHistory();
+
+  // No populamos system aquí porque el backend ya preprende su system prompt de anamnesis
+  messages.push({ role:"user", content:text });
+  renderChat(messages);
+
+  const res = await fetch(API_URL, {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({ messages })
+  });
+  const data = await res.json();
+
+  if (text.trim().toLowerCase() === "recibir resultados") {
+    if (data.mode === "results") {
+      const summary = data.symptoms_text || "(no summary)";
+      const predsHtml = formatPredictions(data.predictions);
+      const assistantMsg = {
+        role:"assistant",
+        content: `Resumen (enviado al modelo):<br><em>${summary}</em><br><br><strong>Predicciones</strong>:<br>${predsHtml}`
+      };
+      messages.push(assistantMsg);
+      saveHistory(messages);
+      renderChat(messages);
+    } else {
+      const assistantMsg = { role:"assistant", content:"No se pudieron obtener resultados." };
+      messages.push(assistantMsg);
+      saveHistory(messages);
+      renderChat(messages);
+    }
+    return;
+  }
+
+  const assistantMsg = { role:"assistant", content: data.answer || "(sin respuesta)" };
+  messages.push(assistantMsg);
+  saveHistory(messages);
+  renderChat(messages);
+}
+
+// Botón enviar
+document.getElementById("sendBtn").addEventListener("click", () => {
+  const input = document.getElementById("messageInput");
+  const text = input.value.trim();
+  if (text) {
+    sendUserMessage(text);
+    input.value="";
+  }
+});
+
+// Enter para enviar
+document.getElementById("messageInput").addEventListener("keypress", e => {
+  if (e.key==="Enter" && !document.getElementById("messageInput").disabled) {
+    document.getElementById("sendBtn").click();
+  }
+});
+
+// Botón resultados (simula escribir "recibir resultados")
+document.getElementById("resultsBtn").addEventListener("click", () => {
+  sendUserMessage("recibir resultados");
+});
+
+// Botón terminar
+document.getElementById("endBtn").addEventListener("click", () => {
+  clearHistory();
+  renderChat([]);
+  // Opcional: también revocar consentimiento
+  localStorage.removeItem("consent");
+  alert("Conversación terminada. El historial ha sido borrado.");
+});
+
+// --- Lógica de consentimiento al cargar ---
+(function init() {
+  const consent = localStorage.getItem("consent"); // "accepted" | "declined" | null
+  const messages = loadHistory();
+
+  if (consent === "accepted") {
+    // Chat habilitado
+    setChatEnabled(true);
+    // Si es la primera vez (sin mensajes), mostramos un intro del asistente
+    if (messages.length === 0) {
+      const intro = { role: "assistant", content: INTRO_ASSISTANT_MSG };
+      messages.push(intro);
+      saveHistory(messages);
+    }
+    renderChat(messages);
+    showConsentOverlay(false);
+  } else if (consent === "declined") {
+    // Deshabilitar chat y mostrar overlay con mensaje de gracias
+    setChatEnabled(false);
+    showConsentOverlay(true);
+    // Cambiamos el contenido del overlay para el estado “gracias”
+    document.getElementById("consentTitle").innerText = "Gracias";
+    document.querySelector("#consentCard p").innerHTML = "Has decidido no aceptar el tratamiento de datos personales. El chat permanecerá deshabilitado hasta que aceptes.";
+    document.getElementById("acceptBtn").style.display = "inline-block";
+    document.getElementById("declineBtn").style.display = "none";
+    renderChat(messages);
+  } else {
+    // Aún no decidió: mostrar overlay y deshabilitar chat
+    setChatEnabled(false);
+    showConsentOverlay(true);
+    renderChat(messages);
+  }
+})();
+
+// Acciones de overlay
+document.getElementById("acceptBtn").addEventListener("click", () => {
+  localStorage.setItem("consent", "accepted");
+  setChatEnabled(true);
+  showConsentOverlay(false);
+
+  let messages = loadHistory();
+  if (messages.length === 0) {
+    const intro = { role: "assistant", content: INTRO_ASSISTANT_MSG };
+    messages.push(intro);
+    saveHistory(messages);
+  }
+  renderChat(loadHistory());
+});
+
+function formatPredictionsList(preds) {
+  const top = [...(preds || [])].sort((a,b) => b.probability - a.probability);
+  if (top.length === 0) return "<em>(Sin predicciones)</em>";
+  return `<ol>${top.map(p => {
+    const pct = (p.probability * 100).toFixed(1);
+    return `<li><strong>${p.disease}</strong> — ${pct}%</li>`;
+  }).join("")}</ol>`;
+}
+
+function renderResultsCard(summaryEs, anamnesisObj, predictions) {
+  const chat = document.getElementById("chat");
+
+  // Tarjeta de resumen
+  const card = document.createElement("div");
+  card.className = "msg";
+  card.innerHTML = `
+    <div style="border:1px solid #e0e0e0; border-radius:8px; padding:12px; background:#fafafa;">
+      <div class="assistant">assistant:</div>
+      <p style="margin:8px 0 12px 0;">${summaryEs.replace(/\n/g,'<br>')}</p>
+
+      <div style="margin:10px 0;">
+        <h4 style="margin:6px 0;">Posibles diagnósticos</h4>
+        ${formatPredictionsList(predictions)}
+      </div>
+
+      <div style="margin:10px 0;">
+        <h4 style="margin:6px 0;">Anamnesis estructurada</h4>
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+          <div>
+            <strong>Motivo de consulta:</strong><br>${(anamnesisObj.motivo_consulta || "no informado")}
+          </div>
+          <div>
+            <strong>Síntoma principal:</strong><br>${(anamnesisObj.enfermedad_actual?.sintoma_principal || "no informado")}
+          </div>
+          <div>
+            <strong>Inicio:</strong><br>${(anamnesisObj.enfermedad_actual?.inicio || "no informado")}
+          </div>
+          <div>
+            <strong>Características:</strong><br>${(anamnesisObj.enfermedad_actual?.caracteristicas || "no informado")}
+          </div>
+          <div>
+            <strong>Antecedentes personales:</strong><br>${(anamnesisObj.antecedentes_personales || []).join(", ") || "—"}
+          </div>
+          <div>
+            <strong>Antecedentes familiares:</strong><br>${(anamnesisObj.antecedentes_familiares || []).join(", ") || "—"}
+          </div>
+          <div>
+            <strong>Hábitos - Tabaquismo:</strong><br>${(anamnesisObj.habitos?.tabaquismo || "no informado")}
+          </div>
+          <div>
+            <strong>Hábitos - Alcohol:</strong><br>${(anamnesisObj.habitos?.alcohol || "no informado")}
+          </div>
+          <div style="grid-column: 1 / -1;">
+            <strong>Síntomas asociados:</strong><br>${(anamnesisObj.sintomas_asociados || []).join(", ") || "—"}
+          </div>
+        </div>
+
+        <details style="margin-top:10px;">
+          <summary>Ver JSON</summary>
+          <pre style="white-space:pre-wrap; background:#fff; border:1px solid #eee; padding:8px; border-radius:6px; margin-top:6px;">${JSON.stringify(anamnesisObj, null, 2)}</pre>
+        </details>
+      </div>
+    </div>
+  `;
+  chat.appendChild(card);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+async function sendUserMessage(text) {
+  let messages = loadHistory();
+
+  messages.push({ role:"user", content:text });
+  renderChat(messages);
+
+  const res = await fetch(API_URL, {
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body: JSON.stringify({ messages })
+  });
+  const data = await res.json();
+
+  if (text.trim().toLowerCase() === "recibir resultados") {
+    if (data.mode === "results") {
+      const summary = data.symptoms_text || "(sin resumen)";
+      const anamnesis = data.anamnesis || {};
+      const preds = data.predictions || [];
+
+      // Pintamos una tarjeta “linda”
+      renderResultsCard(summary, anamnesis, preds);
+
+      // También guardamos el mensaje “lógico” en el historial para consistencia
+      const assistantMsg = {
+        role:"assistant",
+        content: `Resultados recibidos.`
+      };
+      messages.push(assistantMsg);
+      saveHistory(messages);
+    } else {
+      const assistantMsg = { role:"assistant", content:"No se pudieron obtener resultados." };
+      messages.push(assistantMsg);
+      saveHistory(messages);
+      renderChat(messages);
+    }
+    return;
+  }
+
+  const assistantMsg = { role:"assistant", content: data.answer || "(sin respuesta)" };
+  messages.push(assistantMsg);
+  saveHistory(messages);
+  renderChat(messages);
+}
+
+document.getElementById("declineBtn").addEventListener("click", () => {
+  localStorage.setItem("consent", "declined");
+  setChatEnabled(false);
+  // Mostrar mensaje de gracias y ocultar botón de no aceptar
+  document.getElementById("consentTitle").innerText = "Gracias";
+  document.querySelector("#consentCard p").innerHTML = "Has decidido no aceptar el tratamiento de datos personales. El chat permanecerá deshabilitado hasta que aceptes.";
+  document.getElementById("acceptBtn").style.display = "inline-block";
+  document.getElementById("declineBtn").style.display = "none";
+});
+</script>
+
+</body>
+</html>

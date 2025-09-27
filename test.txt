@@ -1,0 +1,100 @@
+curl.exe -X POST "https://94zktjggz6.execute-api.us-west-2.amazonaws.com/dev/chat" -H "Content-Type: application/json" -d '{
+    "messages": [
+      {"role": "user", "content": "Hola, ¿quién eres?"}
+    ]
+  }'
+
+
+Invoke url: https://h5tbtn9ypk.execute-api.us-east-2.amazonaws.com/dev
+
+curl.exe -X POST "https://h5tbtn9ypk.execute-api.us-east-2.amazonaws.com/dev/chat" -H "Content-Type: application/json" -d "{\"messages\":[{\"role\":\"user\",\"content\":\"Hola OpenAI desde API Gateway\"}]}"
+
+
+REGION=us-east-2
+LAMBDA_NAME="chatBotLLM"
+
+# 1) Crear HTTP API
+API_ID=$(aws apigatewayv2 create-api \
+  --name chat-api2 \
+  --protocol-type HTTP \
+  --route-selection-expression '$request.method $request.path' \
+  --region $REGION \
+  --query ApiId --output text)
+
+echo "API_ID=$API_ID"
+
+# 2) Crear integración con Lambda
+LAMBDA_ARN=$(aws lambda get-function --function-name "$LAMBDA_NAME" --region $REGION --query Configuration.FunctionArn --output text)
+
+INTEGRATION_ID=$(aws apigatewayv2 create-integration \
+  --api-id $API_ID \
+  --integration-type AWS_PROXY \
+  --integration-uri "arn:aws:apigateway:$REGION:lambda:path/2015-03-31/functions/$LAMBDA_ARN/invocations" \
+  --payload-format-version "2.0" \
+  --region $REGION \
+  --query IntegrationId --output text)
+
+echo "INTEGRATION_ID=$INTEGRATION_ID"
+
+# 3) Crear ruta POST /chat
+aws apigatewayv2 create-route \
+  --api-id $API_ID \
+  --route-key "POST /chat" \
+  --target "integrations/$INTEGRATION_ID" \
+  --region $REGION
+
+# 4) Habilitar CORS
+aws apigatewayv2 update-api \
+  --api-id $API_ID \
+  --region $REGION \
+  --cors-configuration '{
+    "AllowOrigins": ["*"],
+    "AllowMethods": ["POST","OPTIONS"],
+    "AllowHeaders": ["content-type","authorization"],
+    "ExposeHeaders": [],
+    "MaxAge": 300,
+    "AllowCredentials": false
+  }' > /dev/null
+
+# 5) Crear stage dev
+aws apigatewayv2 create-stage \
+  --api-id $API_ID \
+  --stage-name dev \
+  --auto-deploy \
+  --region $REGION
+
+# 6) Permitir a API Gateway invocar la Lambda
+aws lambda add-permission \
+  --function-name "$LAMBDA_NAME" \
+  --statement-id "apigw-invoke-$API_ID" \
+  --action lambda:InvokeFunction \
+  --principal apigateway.amazonaws.com \
+  --source-arn "arn:aws:execute-api:$REGION:$(aws sts get-caller-identity --query Account --output text):$API_ID/*/*/chat" \
+  --region $REGION
+
+# 7) Mostrar Invoke URL
+INVOKE_URL="https://$API_ID.execute-api.$REGION.amazonaws.com/dev"
+echo "Invoke URL: $INVOKE_URL"
+
+
+Invoke URL: https://182m3xjs0k.execute-api.us-east-2.amazonaws.com/dev
+
+curl.exe -X POST "https://182m3xjs0k.execute-api.us-east-2.amazonaws.com/dev/chat" -H "Content-Type: application/json" -d "{\"messages\":[{\"role\":\"user\",\"content\":\"Hola OpenAI desde API Gateway\"}]}"
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+curl.exe -X POST "https://94zktjggz6.execute-api.us-west-2.amazonaws.com/dev/chat" -H "Content-Type: application/json" -d "{\"messages\":[{\"role\":\"user\",\"content\":\"Hola, ¿qué puedes hacer?\"}]}"
