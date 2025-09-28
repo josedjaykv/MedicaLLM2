@@ -6,7 +6,7 @@ import urllib.request
 OPENAI_API_KEY = os.environ["OPENAI_API_KEY"]
 
 OPENAI_URL = "https://api.openai.com/v1/chat/completions"
-PREDICT_URL = "http://18.116.63.68:8000/predict"
+PREDICT_URL = "http://*********/predict"
 
 # Prompt para extracción (para el endpoint de predicción)
 EXTRACTOR_SYSTEM_PROMPT = (
